@@ -659,7 +659,7 @@ if (typeof THREE.OrbitControls !== 'undefined') {
     controls.minDistance = 5;
     controls.maxDistance = 60;
     controls.enabled = false; // Disabled initially to prevent conflict with PC
-    
+
     // Custom touch behavior for OrbitControls
     controls.touches = {
         ONE: THREE.TOUCH.ROTATE, // 1 finger rotates
@@ -670,22 +670,22 @@ if (typeof THREE.OrbitControls !== 'undefined') {
 // 2. Detect Touch Device
 let isTouchDevice = false;
 function checkTouchDevice() {
-    isTouchDevice = ('ontouchstart' in window) || 
-                   (navigator.maxTouchPoints > 0) ||
-                   (new URLSearchParams(window.location.search).get('touch') === '1');
-                   
+    isTouchDevice = ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (new URLSearchParams(window.location.search).get('touch') === '1');
+
     if (isTouchDevice && controls) {
         console.log("Beta: Touch device detected, enabling OrbitControls");
         controls.enabled = true;
-        
+
         // Hide PC instructions if on mobile
         const pcInstr = document.getElementById('pc-instructions');
-        if(pcInstr) pcInstr.style.display = 'none';
-        
+        if (pcInstr) pcInstr.style.display = 'none';
+
         // Show Toolbar
         const toolbar = document.getElementById('tool-bar');
-        if(toolbar) toolbar.style.display = 'flex';
-        
+        if (toolbar) toolbar.style.display = 'flex';
+
         // Initial Tool State for Touch
         setTouchTool('rotate');
     }
@@ -699,18 +699,18 @@ function checkTouchDevice() {
 
 let currentTouchTool = 'rotate';
 
-window.setTouchTool = function(tool) {
+window.setTouchTool = function (tool) {
     currentTouchTool = tool;
-    
+
     // Update UI Buttons
     ['place', 'rotate', 'delete'].forEach(t => {
         const btn = document.getElementById('tool-' + t);
-        if(btn) {
-            if(t === tool) btn.classList.add('active');
+        if (btn) {
+            if (t === tool) btn.classList.add('active');
             else btn.classList.remove('active');
         }
     });
-    
+
     // Update OrbitControls state based on tool
     if (controls) {
         if (tool === 'rotate') {
@@ -719,71 +719,91 @@ window.setTouchTool = function(tool) {
             controls.enableRotate = false;
         }
     }
-    
+
     // Reset selection/ghost
     if (typeof ghostBlock !== 'undefined') ghostBlock.visible = false;
     if (typeof clearSelection === 'function') clearSelection();
+
+    // Sync Rotation Center for OrbitControls
+    if (controls && tool === 'rotate') {
+        if (typeof updateCameraTarget === 'function') {
+            updateCameraTarget(); // Recalculate cameraTarget from block center
+            // cameraTarget is a global variable from the PC code
+            if (typeof cameraTarget !== 'undefined') {
+                controls.target.copy(cameraTarget);
+                controls.update();
+            }
+        }
+    }
 }
 
 // 4. Touch Event Handlers for Placement/Deletion
 // OrbitControls handles Rotation (1 finger) and Zoom (2 fingers).
 // We need to handle Taps for Placement/Deletion.
 
+let touchStartTime = 0;
+let touchStartPos = new THREE.Vector2();
+
 renderer.domElement.addEventListener('touchstart', (e) => {
     if (!isTouchDevice) return;
-    
+
+    if (e.touches.length === 1) {
+        touchStartTime = Date.now();
+        touchStartPos.set(e.touches[0].clientX, e.touches[0].clientY);
+    }
+
     // If we are in Place or Delete mode, handle single touch as "Mouse Move" for ghost
     // or "Tap" for action. 
     // OrbitControls won't rotate if enableRotate is false (which is true for place/delete modes).
-    
+
     if (e.touches.length === 1 && currentTouchTool !== 'rotate') {
         const touch = e.touches[0];
         // Reuse existing "updateGhostBlock" logic if possible, or implement custom
         // We can manually trigger the existing logic by mocking an event if needed,
         // but looking at usage, updateGhostBlock takes a mouse event.
         // Let's implement a simple version here relying on the existing globals (raycaster, camera, placedBlocks)
-        
+
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        
+
         raycaster.setFromCamera(mouse, camera);
-        
+
         // Same logic as updateGhostBlock but for touch
         if (typeof placedBlocks !== 'undefined') {
             const blockMeshes = placedBlocks.map(b => b.mesh);
             const intersects = raycaster.intersectObjects(blockMeshes);
-            
+
             if (intersects.length > 0) {
-                 const hitBlock = intersects[0].object;
-                 const hitPoint = intersects[0].point;
-                 
-                 // Highlight or Snap?
-                 if (currentTouchTool === 'delete') {
-                     if (typeof selectBlock === 'function') {
-                         clearSelection();
-                         selectBlock(hitBlock);
-                     }
-                 } else if (currentTouchTool === 'place') {
-                     // Snap logic
-                     if (typeof findBestSnapPosition === 'function') {
-                         const snapPos = findBestSnapPosition(hitPoint, hitBlock);
-                         if (snapPos && ghostBlock) {
-                             ghostBlock.position.copy(snapPos);
-                             ghostBlock.visible = true;
-                         }
-                     }
-                 }
+                const hitBlock = intersects[0].object;
+                const hitPoint = intersects[0].point;
+
+                // Highlight or Snap?
+                if (currentTouchTool === 'delete') {
+                    if (typeof selectBlock === 'function') {
+                        clearSelection();
+                        selectBlock(hitBlock);
+                    }
+                } else if (currentTouchTool === 'place') {
+                    // Snap logic
+                    if (typeof findBestSnapPosition === 'function') {
+                        const snapPos = findBestSnapPosition(hitPoint, hitBlock);
+                        if (snapPos && ghostBlock) {
+                            ghostBlock.position.copy(snapPos);
+                            ghostBlock.visible = true;
+                        }
+                    }
+                }
             } else {
                 // Ground check
-                 const intersectPlane = raycaster.intersectObject(gridHelper);
-                 if (intersectPlane.length > 0 && currentTouchTool === 'place') {
-                     if (typeof roundVector === 'function') {
+                const intersectPlane = raycaster.intersectObject(gridHelper);
+                if (intersectPlane.length > 0 && currentTouchTool === 'place') {
+                    if (typeof roundVector === 'function') {
                         const pos = roundVector(intersectPlane[0].point);
                         ghostBlock.position.copy(pos);
                         ghostBlock.visible = true;
-                     }
-                 }
+                    }
+                }
             }
         }
     }
@@ -791,16 +811,36 @@ renderer.domElement.addEventListener('touchstart', (e) => {
 
 renderer.domElement.addEventListener('touchend', (e) => {
     if (!isTouchDevice) return;
-    
-    // Handle Action on Lift (Simple Tap)
+
+    // Tap Detection
+    const touchEndTime = Date.now();
+    const touchDuration = touchEndTime - touchStartTime;
+
+    let isTap = false;
+    if (e.changedTouches.length > 0) {
+        const touch = e.changedTouches[0];
+        const dist = touchStartPos.distanceTo(new THREE.Vector2(touch.clientX, touch.clientY));
+        // Threshold: 300ms time, 10px movement
+        if (touchDuration < 300 && dist < 10) {
+            isTap = true;
+        }
+    }
+
+    // Handle Action on Lift (Only if it was a Tap)
     if (currentTouchTool === 'rotate') return; // OrbitControls handles this
-    
+
+    if (!isTap) return; // Ignore drags/long presses
+
     // If Ghost is visible and tool is place -> Create Block
     if (currentTouchTool === 'place' && ghostBlock && ghostBlock.visible) {
         createBlock(ghostBlock.position.clone(), currentColorIndex);
+        // Don't hide ghost immediately so user can place multiple? 
+        // No, user usually wants feedback. Let's keep ghost but maybe flash?
+        // Actually, existing logic hides it? No.
+        // Let's hide it to be clean, it will reappear on next move.
         ghostBlock.visible = false;
     }
-    
+
     // If Selection exists and tool is delete -> Delete
     if (currentTouchTool === 'delete' && selectedBlocks.size > 0) {
         deleteSelectedBlocks();
