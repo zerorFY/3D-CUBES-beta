@@ -712,12 +712,11 @@ window.setTouchTool = function (tool) {
     });
 
     // Update OrbitControls state based on tool
+    // Update OrbitControls state based on tool
     if (controls) {
-        if (tool === 'rotate') {
-            controls.enableRotate = true;
-        } else {
-            controls.enableRotate = false;
-        }
+        // Always enable rotation for touch (1 finger drag = rotate), 
+        // regardless of tool. Placement is handle by Tap.
+        controls.enableRotate = true;
     }
 
     // Reset selection/ghost
@@ -738,7 +737,6 @@ window.setTouchTool = function (tool) {
 }
 
 // 4. Touch Event Handlers for Placement/Deletion
-// OrbitControls handles Rotation (1 finger) and Zoom (2 fingers).
 // We need to handle Taps for Placement/Deletion.
 
 let touchStartTime = 0;
@@ -746,6 +744,13 @@ let touchStartPos = new THREE.Vector2();
 
 renderer.domElement.addEventListener('touchstart', (e) => {
     if (!isTouchDevice) return;
+
+    // Sync Rotation Center logic (ensure we rotate around structure)
+    if (controls && typeof cameraTarget !== 'undefined') {
+        if (typeof updateCameraTarget === 'function') updateCameraTarget();
+        controls.target.copy(cameraTarget);
+        controls.update();
+    }
 
     if (e.touches.length === 1) {
         touchStartTime = Date.now();
@@ -805,6 +810,20 @@ renderer.domElement.addEventListener('touchstart', (e) => {
                     }
                 }
             }
+        }
+    }
+}
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+    if (!isTouchDevice) return;
+
+    // If dragging significantly, hide ghost block to indicate "Rotation Mode"
+    if (e.touches.length === 1 && currentTouchTool === 'place') {
+        const touch = e.touches[0];
+        const dist = touchStartPos.distanceTo(new THREE.Vector2(touch.clientX, touch.clientY));
+        if (dist > 10 && ghostBlock) {
+            ghostBlock.visible = false;
         }
     }
 }, { passive: false });
