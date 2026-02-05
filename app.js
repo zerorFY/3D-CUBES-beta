@@ -695,8 +695,8 @@ function checkTouchDevice() {
         const toolbar = document.getElementById('tool-bar');
         if (toolbar) toolbar.style.display = 'flex';
 
-        // Initial Tool State for Touch
-        setTouchTool('rotate');
+        // Initial Tool State for Touch - Default to PLACE
+        setTouchTool('place');
     }
 }
 
@@ -706,7 +706,7 @@ function checkTouchDevice() {
 // Since the Stable version DOES NOT have a 'setTool' function exposed (it's hardcoded or missing),
 // we will add a simple one for the Touch UI.
 
-let currentTouchTool = 'rotate';
+let currentTouchTool = 'place'; // Default to place
 
 window.setTouchTool = function (tool) {
     currentTouchTool = tool;
@@ -721,10 +721,8 @@ window.setTouchTool = function (tool) {
     });
 
     // Update OrbitControls state based on tool
-    // Update OrbitControls state based on tool
     if (controls) {
-        // Always enable rotation for touch (1 finger drag = rotate), 
-        // regardless of tool. Placement is handle by Tap.
+        // Rotation is ALWAYS enabled now for Unified Experience
         controls.enableRotate = true;
     }
 
