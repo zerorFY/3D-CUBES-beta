@@ -663,7 +663,7 @@ if (typeof THREE.OrbitControls !== 'undefined') {
     // Custom touch behavior for OrbitControls
     controls.touches = {
         ONE: THREE.TOUCH.ROTATE, // 1 finger rotates
-        TWO: THREE.TOUCH.DOLLY_PAN // 2 fingers zoom
+        TWO: THREE.TOUCH.DOLLY_ROTATE // 2 fingers: Pinch to Zoom + Twist to Rotate
     };
 
     // IMPORTANT: Disable Mouse support in OrbitControls to prevent conflict on Hybrid PCs
