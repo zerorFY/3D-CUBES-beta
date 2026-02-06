@@ -616,7 +616,6 @@ const handleInputEnd = (e, x, y) => {
 
 
 }
-};
 
 
 // --- Mute & Transparency Logic ---
