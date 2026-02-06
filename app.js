@@ -250,7 +250,8 @@ function updateGhostBlock(event) {
 }
 
 function onClick(event) {
-    if (isTouchMode) return; // Touch mode uses buttons, disable direct click placement
+    // Allow mouse clicks even in Touch Mode (for Hybrid devices)
+    // if (isTouchMode) return; 
     if (event.button !== 0) return;
 
     const rect = renderer.domElement.getBoundingClientRect();
@@ -504,10 +505,16 @@ function detectDevice() {
     const urlParams = new URLSearchParams(window.location.search);
     const forceTouch = urlParams.get('touch') === '1';
 
-    const isTouch = ('ontouchstart' in window) ||
-        (navigator.maxTouchPoints > 0) ||
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-        forceTouch;
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // "Touch Mode" enables OrbitControls and Touch UI.
+    // For Hybrid PCs, we want to KEEP PC controls (Mouse) but maybe allow Touch gestures?
+    // Current design binaries: PC Mode vs Touch Mode.
+    // Let's force Touch Mode ONLY on actual Mobile UAs or forced touch.
+    const isTouch = isMobileUA || forceTouch;
+    // NOTE: We ignore navigator.maxTouchPoints for the "Mobile UI" switch 
+    // to prevent Hybrid PCs from losing their Mouse Interface.
+
     isTouchMode = isTouch;
 
     const pcInstructions = document.getElementById('pc-instructions');
@@ -518,20 +525,20 @@ function detectDevice() {
 
     if (isTouch) {
         if (pcInstructions) pcInstructions.style.display = 'none';
-        // Hide text instructions to clean up UI, toolbar is intuitive
-        if (mobileInstructions) mobileInstructions.style.display = 'none';
+        if (mobileInstructions) mobileInstructions.style.display = 'none'; // Hide text instr
         if (toolBar) toolBar.style.display = 'flex';
         if (pcMuteBtn) pcMuteBtn.style.display = 'none';
-
         console.log("Touch Mode ENABLED");
-
-        // Disable PC selection mode
         selectionMode = false;
-        setTool('rotate'); // Initialize UI
+        setTool('place');
     } else {
         if (pcInstructions) pcInstructions.style.display = 'block';
         if (toolBar) toolBar.style.display = 'none';
-        if (pcMuteBtn) pcMuteBtn.style.display = 'block';
+        // Ensure PC Mute Button is visible
+        if (pcMuteBtn) {
+            pcMuteBtn.style.display = 'block';
+            console.log("PC Mute Button Enabled");
+        }
         if (debugBtn) debugBtn.style.display = 'block';
     }
     return isTouch;
@@ -631,6 +638,7 @@ window.toggleTransparency = function () {
     placedBlocks.forEach(block => {
         block.mesh.material.transparent = transparencyMode;
         block.mesh.material.opacity = transparencyMode ? 0.2 : 1.0;
+        block.mesh.material.needsUpdate = true; // Force update
     });
 
     // Update button style
