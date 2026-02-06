@@ -514,12 +514,15 @@ function detectDevice() {
     const mobileInstructions = document.getElementById('mobile-instructions');
     const toolBar = document.getElementById('tool-bar');
     const debugBtn = document.getElementById('debug-touch-btn');
+    const pcMuteBtn = document.getElementById('pc-mute-btn');
 
     if (isTouch) {
         if (pcInstructions) pcInstructions.style.display = 'none';
         // Hide text instructions to clean up UI, toolbar is intuitive
         if (mobileInstructions) mobileInstructions.style.display = 'none';
         if (toolBar) toolBar.style.display = 'flex';
+        if (pcMuteBtn) pcMuteBtn.style.display = 'none';
+
         console.log("Touch Mode ENABLED");
 
         // Disable PC selection mode
@@ -528,6 +531,7 @@ function detectDevice() {
     } else {
         if (pcInstructions) pcInstructions.style.display = 'block';
         if (toolBar) toolBar.style.display = 'none';
+        if (pcMuteBtn) pcMuteBtn.style.display = 'block';
         if (debugBtn) debugBtn.style.display = 'block';
     }
     return isTouch;
@@ -602,7 +606,40 @@ const handleInputEnd = (e, x, y) => {
             }
         }
     }
+
+
+}
 };
+
+
+// --- Mute & Transparency Logic ---
+
+window.toggleMute = function () {
+    const audio = document.getElementById('bg-music');
+    if (audio) {
+        audio.muted = !audio.muted;
+        const icon = audio.muted ? '🔇' : '🔊';
+        // Update all buttons (PC and Touch)
+        const btns = document.querySelectorAll('#tool-mute, #pc-mute-btn');
+        btns.forEach(btn => btn.innerText = icon);
+    }
+}
+
+window.toggleTransparency = function () {
+    // Reuse existing transparencyMode logic
+    transparencyMode = !transparencyMode;
+    placedBlocks.forEach(block => {
+        block.mesh.material.transparent = transparencyMode;
+        block.mesh.material.opacity = transparencyMode ? 0.2 : 1.0;
+    });
+
+    // Update button style
+    const btn = document.getElementById('tool-transparency');
+    if (btn) {
+        if (transparencyMode) btn.classList.add('active');
+        else btn.classList.remove('active');
+    }
+}
 
 // --- Bind Events ---
 renderer.domElement.addEventListener('touchstart', (e) => {
