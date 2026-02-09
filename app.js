@@ -595,9 +595,9 @@ const handleInputEnd = (e, x, y) => {
     const touchDuration = touchEndTime - touchStartTime;
     const dist = touchStartPos.distanceTo(new THREE.Vector2(x, y));
 
-    // Only allow action if it was a quick tap (< 300ms) and minimal movement (< 5px)
+    // Only allow action if it was a quick tap (< 500ms) and minimal movement (< 20px)
     // This prevents accidental deletion/placement after rotating (dragging)
-    if (touchDuration > 300 || dist > 5) return;
+    if (touchDuration > 500 || dist > 20) return;
 
     // --- Perform Action ---
     const rect = renderer.domElement.getBoundingClientRect();
