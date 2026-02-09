@@ -590,6 +590,16 @@ const handleInputEnd = (e, x, y) => {
     if (!isTouchMode) return;
     isRotatingTouch = false;
 
+    // --- Strict Tap Detection ---
+    const touchEndTime = Date.now();
+    const touchDuration = touchEndTime - touchStartTime;
+    const dist = touchStartPos.distanceTo(new THREE.Vector2(x, y));
+
+    // Only allow action if it was a quick tap (< 300ms) and minimal movement (< 5px)
+    // This prevents accidental deletion/placement after rotating (dragging)
+    if (touchDuration > 300 || dist > 5) return;
+
+    // --- Perform Action ---
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
@@ -613,8 +623,6 @@ const handleInputEnd = (e, x, y) => {
             }
         }
     }
-
-
 }
 
 
@@ -754,6 +762,7 @@ let currentTouchTool = 'place'; // Default to place
 
 window.setTouchTool = function (tool) {
     currentTouchTool = tool;
+    currentTool = tool; // Sync with main tool state for consistency
 
     // Update UI Buttons
     ['place', 'rotate', 'delete'].forEach(t => {
