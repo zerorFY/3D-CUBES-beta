@@ -599,9 +599,14 @@ const handleInputEnd = (e, x, y) => {
     const touchDuration = touchEndTime - touchStartTime;
     const dist = touchStartPos.distanceTo(new THREE.Vector2(x, y));
 
-    // Only allow action if it was a quick tap (< 500ms) and minimal movement (< 20px)
-    // This prevents accidental deletion/placement after rotating (dragging)
-    if (touchDuration > 500 || dist > 20) return;
+    // --- Tap Detection ---
+    // Relaxed threshold: 30px movement allowed.
+    if (dist > 30) return;
+
+    // For PLACEMENT, we want to be strict about time (accidental taps).
+    // For DELETION, we allow "press and hold" (ignore duration).
+    if (currentTool === 'place' && touchDuration > 500) return;
+    // if (currentTool === 'delete') -> Proceed regardless of duration
 
     // --- Perform Action ---
     const rect = renderer.domElement.getBoundingClientRect();
