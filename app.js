@@ -552,6 +552,10 @@ let isRotatingTouch = false;
 const handleInputStart = (e, x, y) => {
     if (!isTouchMode) return;
 
+    // --- Initialize Touch Data for Tap Detection ---
+    touchStartTime = Date.now();
+    touchStartPos.set(x, y);
+
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
@@ -746,6 +750,10 @@ function checkTouchDevice() {
         // Show Toolbar
         const toolbar = document.getElementById('tool-bar');
         if (toolbar) toolbar.style.display = 'flex';
+
+        // Ensure PC Mute Button is HIDDEN in Touch Mode (Beta Logic)
+        const pcMuteBtn = document.getElementById('pc-mute-btn');
+        if (pcMuteBtn) pcMuteBtn.style.display = 'none';
 
         // Initial Tool State for Touch - Default to PLACE
         setTouchTool('place');
