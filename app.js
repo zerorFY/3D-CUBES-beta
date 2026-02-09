@@ -21,6 +21,8 @@ let cameraDistance = 25;
 // Touch state
 let touchStartDistance = 0;
 let touchStartRotation = 0;
+let touchStartTime = 0;
+const touchStartPos = new THREE.Vector2();
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -797,6 +799,7 @@ window.setTouchTool = function (tool) {
     if (typeof clearSelection === 'function') clearSelection();
 
     // Sync Rotation Center for OrbitControls
+    // Sync Rotation Center for OrbitControls
     if (controls && tool === 'rotate') {
         if (typeof updateCameraTarget === 'function') {
             updateCameraTarget(); // Recalculate cameraTarget from block center
@@ -810,124 +813,11 @@ window.setTouchTool = function (tool) {
 }
 
 // 4. Touch Event Handlers for Placement/Deletion
-let touchStartTime = 0;
-let touchStartPos = new THREE.Vector2();
+// [REMOVED] Duplicate listeners causing shadowing issues. 
+// Logic validated in handleInputStart/Move/End above.
+if (!isTouchDevice) return;
 
-renderer.domElement.addEventListener('touchstart', (e) => {
-    if (!isTouchDevice) return;
 
-    // Sync Rotation Center logic (ensure we rotate around structure)
-    if (controls && typeof cameraTarget !== 'undefined') {
-        if (typeof updateCameraTarget === 'function') updateCameraTarget();
-        controls.target.copy(cameraTarget);
-        controls.update();
-    }
-
-    if (e.touches.length === 1) {
-        touchStartTime = Date.now();
-        touchStartPos.set(e.touches[0].clientX, e.touches[0].clientY);
-    }
-
-    // Always enable rotation for touch
-    if (controls) controls.enableRotate = true;
-
-    // Show Ghost Block immediately for feedback (aiming)
-    if (e.touches.length === 1 && currentTouchTool !== 'rotate') {
-        const touch = e.touches[0];
-        // Only update ghost, logic reused from updateGhostBlock essentially but manual here
-        // or we can rely on touchmove. 
-        // Let's force an update here so user sees where they tapped.
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-
-        // ... (Simplified: trigger standard updateGhostBlock logic if possible or copy)
-        updateGhostBlock({ clientX: touch.clientX, clientY: touch.clientY, touches: [touch] });
-    }
-}, { passive: false });
-
-renderer.domElement.addEventListener('touchmove', (e) => {
-    if (!isTouchDevice) return;
-
-    // If dragging significantly, hide ghost block to indicate "Rotation Mode"
-    // and prevent visual confusion that "dropping" will place block.
-    if (e.touches.length === 1) {
-        const touch = e.touches[0];
-        const dist = touchStartPos.distanceTo(new THREE.Vector2(touch.clientX, touch.clientY));
-        if (dist > 5 && ghostBlock) { // Strict 5px threshold
-            ghostBlock.visible = false;
-        }
-
-        // Standard update if not hidden (and not rotating fast)
-        if (dist <= 5 && currentTouchTool === 'place') {
-            updateGhostBlock({ clientX: touch.clientX, clientY: touch.clientY, touches: [touch] });
-        }
-    }
-}, { passive: false });
-
-renderer.domElement.addEventListener('touchend', (e) => {
-    if (!isTouchDevice) return;
-
-    // Tap Detection
-    const touchEndTime = Date.now();
-    const touchDuration = touchEndTime - touchStartTime;
-
-    let isTap = false;
-    if (e.changedTouches.length > 0) {
-        const touch = e.changedTouches[0];
-        const dist = touchStartPos.distanceTo(new THREE.Vector2(touch.clientX, touch.clientY));
-
-        // STRICT Threshold: 300ms time, 5px movement
-        if (touchDuration < 300 && dist < 5) {
-            isTap = true;
-        }
-    }
-
-    // Handle Action on Lift (Only if it was a Tap)
-    if (!isTap) return; // Ignore drags/long presses
-
-    // If Ghost is visible (it should be if we didn't drag) and tool is place
-    if (currentTouchTool === 'place') {
-        // Recalculate hit to be sure
-        const lastTouch = e.changedTouches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((lastTouch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((lastTouch.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-
-        // Check for block hit (snap) or ground
-        // Reuse logic? Or direct create if ghost visible?
-        // Ghost visibility is controlled by move/down.
-        // Let's trust ghostBlock position IF it's visible.
-        if (ghostBlock && ghostBlock.visible) {
-            createBlock(ghostBlock.position.clone(), currentColorIndex);
-            ghostBlock.visible = false;
-        } else {
-            // If ghost was hidden (maybe bug), try raycast one last time
-            // ... (Skipping for simplicity, ghost logic should cover it)
-        }
-    }
-
-    // If Selection exists and tool is delete -> Delete
-    if (currentTouchTool === 'delete') {
-        // Perform delete Logic
-        if (selectedBlocks.size > 0) {
-            deleteSelectedBlocks();
-        } else {
-            // Try to select and delete in one tap?
-            // User flow: Tap to select (handled by touchstart/move updateGhostBlock calling select)?
-            // In updateGhostBlock (original code), it handles selection highlight.
-            // So if we tapped a block, it is likely already selected.
-            // We just check if we hit something.
-            // Let's re-raycast to be safe.
-            // ...
-            // Actually, the original touchstart/updateGhost logic handles selection.
-            // So here we just confirm delete.
-            if (selectedBlocks.size > 0) deleteSelectedBlocks();
-        }
-    }
-});
 
 
 // 5. Update Loop Injection
