@@ -602,8 +602,9 @@ const handleInputEnd = (e, x, y) => {
     const dist = touchStartPos.distanceTo(new THREE.Vector2(x, y));
 
     // --- Tap Detection ---
-    // Relaxed threshold: 30px movement allowed.
-    if (dist > 30) return;
+    // Stable Version Logic: No distance check.
+    // Since Rotation is disabled in Delete mode, we don't need to filter drags.
+    // if (dist > 30) return;
 
     // For PLACEMENT, we want to be strict about time (accidental taps).
     // For DELETION, we allow "press and hold" (ignore duration).
@@ -790,8 +791,9 @@ window.setTouchTool = function (tool) {
 
     // Update OrbitControls state based on tool
     if (controls) {
-        // Rotation is ALWAYS enabled now for Unified Experience
-        controls.enableRotate = true;
+        // Unified Experience: Allow rotation in Place mode.
+        // Stable Behavior: Disable rotation in Delete mode to prevent accidental deletions on drag release.
+        controls.enableRotate = (tool !== 'delete');
     }
 
     // Reset selection/ghost
