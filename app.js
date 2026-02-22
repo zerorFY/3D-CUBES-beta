@@ -814,31 +814,17 @@ window.setTouchTool = function (tool) {
     }
 }
 
-// 4. Touch Event Handlers for Placement/Deletion
-// [REMOVED] Duplicate listeners causing shadowing issues. 
-// Logic validated in handleInputStart/Move/End above.
-if (!isTouchDevice) return;
-
-
-
-
 // 5. Update Loop Injection
-// We need controls.update() to run. 
-// Since we can't easily modify the 'animate' function defined above, 
-// we'll set up a separate interval or use a hack.
-// Hack: Override window.requestAnimationFrame? No, that's dangerous.
-// Safe way: Add a second animation loop just for controls? Or hook into renderer.
-// Simplest safe way:
+// We need controls.update() to run for damping.
 setInterval(() => {
     if (controls && isTouchDevice) controls.update();
 }, 16); // ~60fps
 
 // 6. Hook up UI Buttons
-// We assume the HTML elements exist (tool-place, tool-rotate, tool-delete)
 document.getElementById('tool-place')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('place'); });
 document.getElementById('tool-rotate')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('rotate'); });
 document.getElementById('tool-delete')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('delete'); });
 
-// Initial Check
-checkTouchDevice();
+// Initial Check - Handled by detectDevice() above.
+// checkTouchDevice() removed as it was redundant/undefined.
 
