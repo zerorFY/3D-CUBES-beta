@@ -485,6 +485,8 @@ let currentTool = 'rotate'; // Default to rotate
 
 // --- Tool Switching ---
 window.setTool = function (tool) {
+    if (tool === 'transparency' || tool === 'mute') return; // Handled by separate toggles
+
     currentTool = tool;
 
     // Update UI
@@ -554,10 +556,6 @@ let isRotatingTouch = false;
 const handleInputStart = (e, x, y) => {
     if (!isTouchMode) return;
 
-    // --- Initialize Touch Data for Tap Detection ---
-    touchStartTime = Date.now();
-    touchStartPos.set(x, y);
-
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
@@ -596,22 +594,6 @@ const handleInputEnd = (e, x, y) => {
     if (!isTouchMode) return;
     isRotatingTouch = false;
 
-    // --- Strict Tap Detection ---
-    const touchEndTime = Date.now();
-    const touchDuration = touchEndTime - touchStartTime;
-    const dist = touchStartPos.distanceTo(new THREE.Vector2(x, y));
-
-    // --- Tap Detection ---
-    // Stable Version Logic: No distance check.
-    // Since Rotation is disabled in Delete mode, we don't need to filter drags.
-    // if (dist > 30) return;
-
-    // For PLACEMENT, we want to be strict about time (accidental taps).
-    // For DELETION, we allow "press and hold" (ignore duration).
-    if (currentTool === 'place' && touchDuration > 500) return;
-    // if (currentTool === 'delete') -> Proceed regardless of duration
-
-    // --- Perform Action ---
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
@@ -635,7 +617,7 @@ const handleInputEnd = (e, x, y) => {
             }
         }
     }
-}
+};
 
 
 // --- Mute & Transparency Logic ---

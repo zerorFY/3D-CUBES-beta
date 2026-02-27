@@ -148,11 +148,11 @@
 
         <!-- Mobile Instructions -->
         <div id="mobile-instructions" style="display: none;">
-            <div class="control-item"><strong>1 Finger Drag:</strong> Rotate</div>
-            <div class="control-item"><strong>Tap:</strong> Place Block</div>
-            <div class="control-item"><strong>2 Fingers:</strong> Zoom + Rotate</div>
-            <div class="control-item"><strong>Tap ✅:</strong> Place</div>
-            <div class="control-item"><strong>Tap 🗑️:</strong> Delete</div>
+            <div class="control-item"><strong>单指拖动:</strong> 旋转视角</div>
+            <div class="control-item"><strong>单指点击:</strong> 瞄准(移动光标)</div>
+            <div class="control-item"><strong>双指捏合:</strong> 缩放</div>
+            <div class="control-item"><strong>点击 ✅:</strong> 放置方块</div>
+            <div class="control-item"><strong>点击 🗑️:</strong> 删除方块</div>
         </div>
 
         <div class="color-palette">
@@ -170,8 +170,8 @@
 
     <!-- Mobile Tool Bar -->
     <div id="tool-bar" style="display: none;">
-        <button id="tool-place" class="tool-btn active" onclick="setTool('place')">📦</button>
-        <!-- Rotate button removed for unified experience -->
+        <button id="tool-place" class="tool-btn" onclick="setTool('place')">📦</button>
+        <button id="tool-rotate" class="tool-btn active" onclick="setTool('rotate')">🔄</button>
         <button id="tool-delete" class="tool-btn" onclick="setTool('delete')">🗑️</button>
         <button id="tool-transparency" class="tool-btn" onclick="toggleTransparency()">👁️</button>
         <button id="tool-mute" class="tool-btn" onclick="toggleMute()">🔊</button>
@@ -215,8 +215,7 @@
     </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="app.js?v=beta2185"></script>
+    <script src="app.js?v=beta2186"></script>
 
     <script>
         // Audio Auto-play handling

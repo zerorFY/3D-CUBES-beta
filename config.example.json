@@ -1,0 +1,5 @@
+{
+    "log_level": "INFO",
+    "browser_headless": true,
+    "screenshot_path": "logs/screenshots"
+}

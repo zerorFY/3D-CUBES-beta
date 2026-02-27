@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Block Builder (Beta)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+            max-width: 280px;
+        }
+
+        #controls h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .control-item {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .control-item strong {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .color-palette {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .color-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+        }
+
+        .color-box:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .color-box.active {
+            border-color: #fff;
+            box-shadow: 0 0 0 2px #667eea;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Mobile Tool Bar */
+        #tool-bar {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+        }
+
+        .tool-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.8);
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tool-btn.active {
+            background: #667eea;
+            border-color: #fff;
+            color: #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <h2>3D Block Builder (Beta)</h2>
+
+        <!-- PC Instructions -->
+        <div id="pc-instructions">
+            <div class="control-item"><strong>L-Click:</strong> Place Block</div>
+            <div class="control-item"><strong>Shift + Click:</strong> Delete Block</div>
+            <div class="control-item"><strong>R-Click Drag:</strong> Rotate View</div>
+            <div class="control-item"><strong>M-Click Drag:</strong> Pan View</div>
+            <div class="control-item"><strong>Scroll:</strong> Zoom</div>
+            <div class="control-item"><strong>1-4:</strong> Change Color</div>
+            <div class="control-item"><strong>T:</strong> Toggle Transparency</div>
+        </div>
+
+        <!-- Mobile Instructions -->
+        <div id="mobile-instructions" style="display: none;">
+            <div class="control-item"><strong>单指拖动:</strong> 旋转视角</div>
+            <div class="control-item"><strong>单指点击:</strong> 瞄准(移动光标)</div>
+            <div class="control-item"><strong>双指捏合:</strong> 缩放</div>
+            <div class="control-item"><strong>点击 ✅:</strong> 放置方块</div>
+            <div class="control-item"><strong>点击 🗑️:</strong> 删除方块</div>
+        </div>
+
+        <div class="color-palette">
+            <div class="color-box" data-color="0" style="background: #4A90E2;"></div>
+            <div class="color-box" data-color="1" style="background: #FF8C42;"></div>
+            <div class="color-box" data-color="2" style="background: #50C878;"></div>
+            <div class="color-box" data-color="3" style="background: #E040FB;"></div>
+        </div>
+        <div
+            style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #888;">
+            Design by <strong style="color: #667eea;">zeror</strong><br>
+            <span style="font-size: 10px; color: #aaa;">Updated: Feb 27 16:55</span>
+        </div>
+    </div>
+
+    <!-- Mobile Tool Bar -->
+    <div id="tool-bar" style="display: none;">
+        <button id="tool-place" class="tool-btn" onclick="setTool('place')">📦</button>
+        <button id="tool-rotate" class="tool-btn active" onclick="setTool('rotate')">🔄</button>
+        <button id="tool-delete" class="tool-btn" onclick="setTool('delete')">🗑️</button>
+        <button id="tool-transparency" class="tool-btn" onclick="toggleTransparency()">👁️</button>
+        <button id="tool-mute" class="tool-btn" onclick="toggleMute()">🔊</button>
+    </div>
+
+    <!-- PC Mute Button (Top Left) -->
+    <button id="pc-mute-btn" onclick="toggleMute()" style="
+        position: absolute;
+        top: 20px;
+        right: 20px; /* Actually, User said PC Top-Left, but Controls are there. Let's put it next to controls or simply absolute Top-Right to avoid overlap? 
+        User said Top-Left explicitly. Controls are at Left: 20px. 
+        I will put it inside the controls box? No, separate button. 
+        Let's put it at left: 20px + width? Or just above controls?
+        Let's put it at Top Right for PC to balance? 
+        User said: 'PC放左上角' (PC Put Top Left). 
+        Okay, if Controls are at Top Left, I will put it *inside* the controls header or just below the title?
+        Or maybe offset it.
+        Let's try putting it at `left: 320px` (Controls max-width 280 + 20 margin + 20 gap).
+        */
+        left: 320px; 
+        top: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255,255,255,0.9);
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 101;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: none; /* Controlled by JS */
+    ">🔊</button>
+
+    <!-- Simulator Button Removed -->
+
+    <div id="canvas-container"></div>
+
+    <!-- Background Audio -->
+    <audio id="bg-music" loop autoplay>
+        <source src="Fractal Study Session.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="app.js?v=beta2186"></script>
+
+    <script>
+        // Audio Auto-play handling
+        window.onload = function () {
+            const audio = document.getElementById('bg-music');
+            audio.volume = 0.2;
+            const promise = audio.play();
+            if (promise !== undefined) {
+                promise.then(_ => {
+                    // Autoplay started!
+                }).catch(error => {
+                    // Autoplay was prevented.
+                    console.log("Autoplay prevented, waiting for interaction");
+                });
+            }
+        };
+
+        document.addEventListener('click', function () {
+            const audio = document.getElementById('bg-music');
+            if (audio.paused) {
+                audio.volume = 0.2;
+                audio.play().catch(e => console.log("Audio play failed:", e));
+            }
+        }, { once: true });
+
+        document.addEventListener('touchstart', function () {
+            const audio = document.getElementById('bg-music');
+            if (audio.paused) {
+                audio.volume = 0.2;
+                audio.play().catch(e => console.log("Audio play failed:", e));
+            }
+        }, { once: true });
+    </script>
+</body>
+
+</html>

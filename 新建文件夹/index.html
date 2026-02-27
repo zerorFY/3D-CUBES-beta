@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Block Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+            max-width: 280px;
+        }
+
+        #controls h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 8px;
+        }
+
+        .control-item {
+            margin: 8px 0;
+            font-size: 14px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .control-item strong {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .color-palette {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .color-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+        }
+
+        .color-box:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .color-box.active {
+            border-color: #fff;
+            box-shadow: 0 0 0 2px #667eea;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Mobile Tool Bar */
+        #tool-bar {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+        }
+
+        .tool-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.8);
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tool-btn.active {
+            background: #667eea;
+            border-color: #fff;
+            color: #fff;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <h2>3D 方块搭建工具</h2>
+
+        <!-- PC Instructions -->
+        <div id="pc-instructions">
+            <div class="control-item"><strong>左键:</strong> 放置方块</div>
+            <div class="control-item"><strong>Shift + 左键:</strong> 删除方块</div>
+            <div class="control-item"><strong>右键拖动:</strong> 旋转视角</div>
+            <div class="control-item"><strong>中键拖动:</strong> 平移画面</div>
+            <div class="control-item"><strong>滚轮:</strong> 缩放</div>
+            <div class="control-item"><strong>1-4:</strong> 切换颜色</div>
+            <div class="control-item"><strong>T (按住):</strong> 透视模式</div>
+        </div>
+
+        <!-- Mobile Instructions -->
+        <div id="mobile-instructions" style="display: none;">
+            <div class="control-item"><strong>单指拖动:</strong> 旋转视角</div>
+            <div class="control-item"><strong>单指点击:</strong> 瞄准(移动光标)</div>
+            <div class="control-item"><strong>双指捏合:</strong> 缩放</div>
+            <div class="control-item"><strong>点击 ✅:</strong> 放置方块</div>
+            <div class="control-item"><strong>点击 🗑️:</strong> 删除方块</div>
+        </div>
+
+        <div class="color-palette">
+            <div class="color-box" data-color="0" style="background: #4A90E2;"></div>
+            <div class="color-box" data-color="1" style="background: #FF8C42;"></div>
+            <div class="color-box" data-color="2" style="background: #50C878;"></div>
+            <div class="color-box" data-color="3" style="background: #E040FB;"></div>
+        </div>
+        <div
+            style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 12px; color: #888;">
+            Design by <strong style="color: #667eea;">zeror</strong>
+        </div>
+    </div>
+
+    <!-- Mobile Tool Bar -->
+    <div id="tool-bar" style="display: none;">
+        <button id="tool-place" class="tool-btn" onclick="setTool('place')">📦</button>
+        <button id="tool-rotate" class="tool-btn" onclick="setTool('rotate')">🔄</button>
+        <button id="tool-delete" class="tool-btn" onclick="setTool('delete')">🗑️</button>
+    </div>
+
+    <!-- Simulator Button (Visible on PC only) -->
+    <button id="debug-touch-btn" onclick="toggleDebugTouch()" style="
+        position: absolute; 
+        bottom: 20px; 
+        left: 20px; 
+        padding: 10px 15px;
+        background: #333;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 12px;
+        opacity: 0.7;
+        z-index: 1000;
+        display: none;
+    ">🎮 模拟 iPad 模式</button>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="app.js?v=2"></script>
+</body>
+
+</html>
