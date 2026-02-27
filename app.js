@@ -801,7 +801,6 @@ window.setTouchTool = function (tool) {
     if (typeof clearSelection === 'function') clearSelection();
 
     // Sync Rotation Center for OrbitControls
-    // Sync Rotation Center for OrbitControls
     if (controls && tool === 'rotate') {
         if (typeof updateCameraTarget === 'function') {
             updateCameraTarget(); // Recalculate cameraTarget from block center
