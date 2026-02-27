@@ -25,29 +25,31 @@
 
         #controls {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 100;
-            max-width: 280px;
+            max-width: 200px;
         }
 
         #controls h2 {
-            margin-bottom: 15px;
+            margin-bottom: 8px;
             color: #333;
-            font-size: 18px;
+            font-size: 14px;
             border-bottom: 2px solid #667eea;
-            padding-bottom: 8px;
+            padding-bottom: 5px;
         }
 
         .control-item {
-            margin: 8px 0;
-            font-size: 14px;
+            margin: 4px 0;
+            font-size: 11px;
             color: #555;
-            line-height: 1.6;
+            line-height: 1.5;
         }
 
         .control-item strong {
@@ -57,19 +59,19 @@
 
         .color-palette {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            padding-top: 15px;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
             border-top: 1px solid #e0e0e0;
         }
 
         .color-box {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
             cursor: pointer;
             transition: all 0.3s ease;
-            border: 3px solid transparent;
+            border: 2px solid transparent;
         }
 
         .color-box:hover {

@@ -327,10 +327,22 @@ function updateCamera() {
 }
 
 // Mouse controls
+let pcMouseDownPos = { x: 0, y: 0 };
+let pcMouseDownTime = 0;
+let isLeftDragging = false;
+
 renderer.domElement.addEventListener('mousedown', (e) => {
-    if (e.button === 2) {
+    if (e.button === 0) {
+        // Left click: record for tap detection, also start rotation
+        pcMouseDownPos = { x: e.clientX, y: e.clientY };
+        pcMouseDownTime = Date.now();
+        isLeftDragging = true;
         isRotating = true;
-        updateCameraTarget(); // Center on blocks when starting rotation
+        updateCameraTarget();
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+    } else if (e.button === 2) {
+        isRotating = true;
+        updateCameraTarget();
         previousMousePosition = { x: e.clientX, y: e.clientY };
         e.preventDefault();
     } else if (e.button === 1) {
@@ -371,9 +383,20 @@ renderer.domElement.addEventListener('mousemove', (e) => {
     }
 });
 
-renderer.domElement.addEventListener('mouseup', () => {
-    isRotating = false;
-    isPanning = false;
+renderer.domElement.addEventListener('mouseup', (e) => {
+    if (e.button === 0 && isLeftDragging) {
+        isLeftDragging = false;
+        isRotating = false;
+        // Tap detection: short time + small distance = click to place
+        const dist = Math.hypot(e.clientX - pcMouseDownPos.x, e.clientY - pcMouseDownPos.y);
+        const duration = Date.now() - pcMouseDownTime;
+        if (dist < 5 && duration < 200) {
+            onClick(e);
+        }
+    } else {
+        isRotating = false;
+        isPanning = false;
+    }
 });
 
 renderer.domElement.addEventListener('wheel', (e) => {
@@ -387,7 +410,6 @@ renderer.domElement.addEventListener('wheel', (e) => {
 // See 'handleInputStart' and subsequent listeners.
 
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-renderer.domElement.addEventListener('mousedown', onClick);
 
 // Keyboard controls
 document.addEventListener('keydown', (e) => {
@@ -511,13 +533,10 @@ function detectDevice() {
 
     const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-    // "Touch Mode" enables OrbitControls and Touch UI.
-    // For Hybrid PCs, we want to KEEP PC controls (Mouse) but maybe allow Touch gestures?
-    // Current design binaries: PC Mode vs Touch Mode.
-    // Let's force Touch Mode ONLY on actual Mobile UAs or forced touch.
-    const isTouch = isMobileUA || forceTouch;
-    // NOTE: We ignore navigator.maxTouchPoints for the "Mobile UI" switch 
-    // to prevent Hybrid PCs from losing their Mouse Interface.
+    // iPadOS 13+ reports desktop UA, but maxTouchPoints > 0
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    const isTouch = isMobileUA || forceTouch || hasTouch;
 
     isTouchMode = isTouch;
 
@@ -529,16 +548,15 @@ function detectDevice() {
 
     if (isTouch) {
         if (pcInstructions) pcInstructions.style.display = 'none';
-        if (mobileInstructions) mobileInstructions.style.display = 'none'; // Hide text instr
+        if (mobileInstructions) mobileInstructions.style.display = 'none';
         if (toolBar) toolBar.style.display = 'flex';
         if (pcMuteBtn) pcMuteBtn.style.display = 'none';
         console.log("Touch Mode ENABLED");
         selectionMode = false;
-        setTool('place');
+        setTool('rotate');
     } else {
         if (pcInstructions) pcInstructions.style.display = 'block';
         if (toolBar) toolBar.style.display = 'none';
-        // Ensure PC Mute Button is visible
         if (pcMuteBtn) {
             pcMuteBtn.style.display = 'block';
             console.log("PC Mute Button Enabled");
@@ -686,126 +704,3 @@ window.toggleDebugTouch = function () {
 
 
 animate();
-
-// ==========================================
-// BETA FEATURE: iPad/Touch Support (OrbitControls)
-// ==========================================
-// This section is appended to the stable code to add Touch capabilities
-// WITHOUT modifying the existing PC mouse/click logic above.
-
-// 1. Initialize OrbitControls (only if available)
-let controls;
-if (typeof THREE.OrbitControls !== 'undefined') {
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enableRotate = false; // Disabled by default
-    controls.enableZoom = true;    // Always allow zoom
-    controls.enablePan = false;
-    controls.minDistance = 5;
-    controls.maxDistance = 60;
-    controls.enabled = false; // Disabled initially to prevent conflict with PC
-
-    // Custom touch behavior for OrbitControls
-    controls.touches = {
-        ONE: THREE.TOUCH.ROTATE, // 1 finger rotates
-        TWO: THREE.TOUCH.DOLLY_ROTATE // 2 fingers: Pinch to Zoom + Twist to Rotate
-    };
-
-    // IMPORTANT: Disable Mouse support in OrbitControls to prevent conflict on Hybrid PCs
-    // This ensures that even if controls are enabled (due to touch detection), 
-    // the mouse still triggers the standard PC events defined above.
-    controls.mouseButtons = {
-        LEFT: null,
-        MIDDLE: null,
-        RIGHT: null
-    };
-}
-
-// 2. Detect Touch Device
-let isTouchDevice = false;
-function checkTouchDevice() {
-    isTouchDevice = ('ontouchstart' in window) ||
-        (navigator.maxTouchPoints > 0) ||
-        (new URLSearchParams(window.location.search).get('touch') === '1');
-
-    if (isTouchDevice && controls) {
-        console.log("Beta: Touch device detected, enabling OrbitControls");
-        controls.enabled = true;
-
-        // Hide PC instructions if on mobile
-        const pcInstr = document.getElementById('pc-instructions');
-        if (pcInstr) pcInstr.style.display = 'none';
-
-        // Show Toolbar
-        const toolbar = document.getElementById('tool-bar');
-        if (toolbar) toolbar.style.display = 'flex';
-
-        // Ensure PC Mute Button is HIDDEN in Touch Mode (Beta Logic)
-        const pcMuteBtn = document.getElementById('pc-mute-btn');
-        if (pcMuteBtn) pcMuteBtn.style.display = 'none';
-
-        // Initial Tool State for Touch - Default to PLACE
-        setTouchTool('place');
-    }
-}
-
-// 3. Touch Tool Logic
-// We use a separate function to avoid redefining the PC 'setTool' if it exists, 
-// or we can hijack the toolbar buttons.
-// Since the Stable version DOES NOT have a 'setTool' function exposed (it's hardcoded or missing),
-// we will add a simple one for the Touch UI.
-
-let currentTouchTool = 'place'; // Default to place
-
-window.setTouchTool = function (tool) {
-    currentTouchTool = tool;
-    currentTool = tool; // Sync with main tool state for consistency
-
-    // Update UI Buttons
-    ['place', 'rotate', 'delete'].forEach(t => {
-        const btn = document.getElementById('tool-' + t);
-        if (btn) {
-            if (t === tool) btn.classList.add('active');
-            else btn.classList.remove('active');
-        }
-    });
-
-    // Update OrbitControls state based on tool
-    if (controls) {
-        // Unified Experience: Allow rotation in Place mode.
-        // Stable Behavior: Disable rotation in Delete mode to prevent accidental deletions on drag release.
-        controls.enableRotate = (tool !== 'delete');
-    }
-
-    // Reset selection/ghost
-    if (typeof ghostBlock !== 'undefined') ghostBlock.visible = false;
-    if (typeof clearSelection === 'function') clearSelection();
-
-    // Sync Rotation Center for OrbitControls
-    if (controls && tool === 'rotate') {
-        if (typeof updateCameraTarget === 'function') {
-            updateCameraTarget(); // Recalculate cameraTarget from block center
-            // cameraTarget is a global variable from the PC code
-            if (typeof cameraTarget !== 'undefined') {
-                controls.target.copy(cameraTarget);
-                controls.update();
-            }
-        }
-    }
-}
-
-// 5. Update Loop Injection
-// We need controls.update() to run for damping.
-setInterval(() => {
-    if (controls && isTouchDevice) controls.update();
-}, 16); // ~60fps
-
-// 6. Hook up UI Buttons
-document.getElementById('tool-place')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('place'); });
-document.getElementById('tool-rotate')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('rotate'); });
-document.getElementById('tool-delete')?.addEventListener('touchstart', (e) => { e.preventDefault(); setTouchTool('delete'); });
-
-// Initial Check - Handled by detectDevice() above.
-// checkTouchDevice() removed as it was redundant/undefined.
-
