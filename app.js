@@ -503,7 +503,7 @@ updateCamera();
 
 // --- Tool & Device State ---
 // isTouchMode is declared at top of file
-let currentTool = 'rotate'; // Default to rotate
+let currentTool = 'place'; // Default to place
 
 // --- Tool Switching ---
 window.setTool = function (tool) {
@@ -512,7 +512,7 @@ window.setTool = function (tool) {
     currentTool = tool;
 
     // Update UI
-    ['place', 'rotate', 'delete'].forEach(t => {
+    ['place', 'delete'].forEach(t => {
         const btn = document.getElementById('tool-' + t);
         if (btn) {
             if (t === tool) btn.classList.add('active');
@@ -541,101 +541,176 @@ function detectDevice() {
     isTouchMode = isTouch;
 
     const pcInstructions = document.getElementById('pc-instructions');
-    const mobileInstructions = document.getElementById('mobile-instructions');
-    const toolBar = document.getElementById('tool-bar');
-    const debugBtn = document.getElementById('debug-touch-btn');
+    const touchInstructions = document.getElementById('touch-instructions');
+    const touchToolBar = document.getElementById('touch-tool-bar');
     const pcMuteBtn = document.getElementById('pc-mute-btn');
 
     if (isTouch) {
         if (pcInstructions) pcInstructions.style.display = 'none';
-        if (mobileInstructions) mobileInstructions.style.display = 'none';
-        if (toolBar) toolBar.style.display = 'flex';
+        if (touchInstructions) touchInstructions.style.display = 'block';
+        if (touchToolBar) touchToolBar.style.display = 'flex';
         if (pcMuteBtn) pcMuteBtn.style.display = 'none';
         console.log("Touch Mode ENABLED");
         selectionMode = false;
-        setTool('rotate');
+        setTool('place');
     } else {
         if (pcInstructions) pcInstructions.style.display = 'block';
-        if (toolBar) toolBar.style.display = 'none';
+        if (touchInstructions) touchInstructions.style.display = 'none';
+        if (touchToolBar) touchToolBar.style.display = 'none';
         if (pcMuteBtn) {
             pcMuteBtn.style.display = 'block';
             console.log("PC Mute Button Enabled");
         }
-        if (debugBtn) debugBtn.style.display = 'block';
     }
     return isTouch;
 }
 
 detectDevice(); // Initial Run
 
-// --- Unified Touch logic ---
-let isRotatingTouch = false;
+// --- Gesture-based Touch Logic ---
+// State for touch gesture detection
+let touchDragDistance = 0;
+let touchIsDragging = false;
+let twoFingerActive = false;
+let lastPinchDist = 0;
+let lastTwoFingerCenter = { x: 0, y: 0 };
 
-const handleInputStart = (e, x, y) => {
+function getTouchDistance(t1, t2) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+}
+
+function getTouchCenter(t1, t2) {
+    return {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2
+    };
+}
+
+// --- Touch Start ---
+renderer.domElement.addEventListener('touchstart', (e) => {
     if (!isTouchMode) return;
 
-    const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
+    if (e.touches.length === 1) {
+        // Single finger: record start for tap vs drag detection
+        const t = e.touches[0];
+        touchStartPos.set(t.clientX, t.clientY);
+        touchStartTime = Date.now();
+        touchDragDistance = 0;
+        touchIsDragging = false;
+        twoFingerActive = false;
 
-    if (currentTool === 'rotate') {
-        isRotatingTouch = true;
-        previousMousePosition = { x: x, y: y };
+        // Update ghost block position
+        updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
     }
-    else if (currentTool === 'place') {
-        // Just update ghost, wait for move or end
-        updateGhostBlock({ clientX: x, clientY: y });
+    else if (e.touches.length === 2) {
+        // Two fingers: start pinch-zoom / rotate
+        twoFingerActive = true;
+        touchIsDragging = false;
+        lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
+        lastTwoFingerCenter = getTouchCenter(e.touches[0], e.touches[1]);
+        updateCameraTarget();
     }
-};
+}, { passive: true });
 
-const handleInputMove = (e, x, y) => {
+// --- Touch Move ---
+renderer.domElement.addEventListener('touchmove', (e) => {
     if (!isTouchMode) return;
+    e.preventDefault();
 
-    // Update ghost if placing
-    if (currentTool === 'place') {
-        updateGhostBlock({ clientX: x, clientY: y });
+    if (e.touches.length === 1 && !twoFingerActive) {
+        // Single finger drag: move the ghost cursor
+        const t = e.touches[0];
+        const dx = t.clientX - touchStartPos.x;
+        const dy = t.clientY - touchStartPos.y;
+        touchDragDistance = Math.hypot(dx, dy);
+
+        if (touchDragDistance > 10) {
+            touchIsDragging = true;
+        }
+
+        // Always update ghost position while dragging
+        updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
     }
-    else if (currentTool === 'rotate' && isRotatingTouch) {
-        const deltaX = x - previousMousePosition.x;
-        const deltaY = y - previousMousePosition.y;
+    else if (e.touches.length === 2) {
+        twoFingerActive = true;
 
-        cameraRotation.y += deltaX * 0.01;
-        cameraRotation.x += deltaY * 0.01;
+        // Pinch zoom
+        const newDist = getTouchDistance(e.touches[0], e.touches[1]);
+        if (lastPinchDist > 0) {
+            const scale = lastPinchDist / newDist;
+            cameraDistance *= scale;
+            cameraDistance = Math.max(5, Math.min(50, cameraDistance));
+        }
+        lastPinchDist = newDist;
+
+        // Two-finger drag = rotate
+        const newCenter = getTouchCenter(e.touches[0], e.touches[1]);
+        const deltaX = newCenter.x - lastTwoFingerCenter.x;
+        const deltaY = newCenter.y - lastTwoFingerCenter.y;
+
+        cameraRotation.y += deltaX * 0.008;
+        cameraRotation.x += deltaY * 0.008;
         cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
 
+        lastTwoFingerCenter = newCenter;
+
         updateCamera();
-        previousMousePosition = { x: x, y: y };
     }
-};
+}, { passive: false });
 
-const handleInputEnd = (e, x, y) => {
+// --- Touch End ---
+renderer.domElement.addEventListener('touchend', (e) => {
     if (!isTouchMode) return;
-    isRotatingTouch = false;
 
-    const rect = renderer.domElement.getBoundingClientRect();
-    mouse.x = ((x - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((y - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-
-    if (currentTool === 'place' && ghostBlock.visible) {
-        createBlock(ghostBlock.position.clone(), currentColorIndex);
+    // If two-finger gesture just ended (one finger lifted), reset but don't act
+    if (twoFingerActive) {
+        if (e.touches.length === 0) {
+            twoFingerActive = false;
+            lastPinchDist = 0;
+        }
+        return;
     }
-    else if (currentTool === 'delete') {
-        const blockMeshes = placedBlocks.map(b => b.mesh);
-        const intersects = raycaster.intersectObjects(blockMeshes);
-        if (intersects.length > 0) {
-            const hitBlock = intersects[0].object;
-            const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
-            if (index !== -1) {
-                const block = placedBlocks[index];
-                scene.remove(block.mesh);
-                scene.remove(block.wireframe);
-                occupiedPositions.delete(positionKey(block.mesh.position));
-                placedBlocks.splice(index, 1);
+
+    // Single finger tap detection
+    if (e.changedTouches.length > 0 && !touchIsDragging) {
+        const t = e.changedTouches[0];
+        const duration = Date.now() - touchStartTime;
+        const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
+
+        // Tap: short duration + small distance
+        if (dist < 15 && duration < 300) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((t.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((t.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            if (currentTool === 'place') {
+                // Place block at ghost position
+                if (ghostBlock.visible) {
+                    createBlock(ghostBlock.position.clone(), currentColorIndex);
+                }
+            }
+            else if (currentTool === 'delete') {
+                // Delete the tapped block
+                const blockMeshes = placedBlocks.map(b => b.mesh);
+                const intersects = raycaster.intersectObjects(blockMeshes);
+                if (intersects.length > 0) {
+                    const hitBlock = intersects[0].object;
+                    const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
+                    if (index !== -1) {
+                        const block = placedBlocks[index];
+                        scene.remove(block.mesh);
+                        scene.remove(block.wireframe);
+                        occupiedPositions.delete(positionKey(block.mesh.position));
+                        placedBlocks.splice(index, 1);
+                    }
+                }
             }
         }
     }
-};
+
+    touchIsDragging = false;
+}, { passive: true });
 
 
 // --- Mute & Transparency Logic ---
@@ -668,28 +743,57 @@ window.toggleTransparency = function () {
     }
 }
 
-// --- Bind Events ---
-renderer.domElement.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) handleInputStart(e, e.touches[0].clientX, e.touches[0].clientY);
-});
-renderer.domElement.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1) handleInputMove(e, e.touches[0].clientX, e.touches[0].clientY);
-    e.preventDefault();
-});
-renderer.domElement.addEventListener('touchend', (e) => {
-    if (e.changedTouches.length > 0) handleInputEnd(e, e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-    e.preventDefault();
-});
+// --- Touch Help Toggle ---
+window.toggleTouchHelp = function () {
+    const helpPanel = document.getElementById('touch-help');
+    if (helpPanel) {
+        helpPanel.style.display = helpPanel.style.display === 'none' ? 'block' : 'none';
+    }
+}
 
-// Simulator Events
+// --- Simulator Events (for testing touch mode on desktop) ---
 renderer.domElement.addEventListener('mousedown', (e) => {
-    if (isTouchMode && e.button === 0) handleInputStart(e, e.clientX, e.clientY);
+    if (isTouchMode && e.button === 0) {
+        touchStartPos.set(e.clientX, e.clientY);
+        touchStartTime = Date.now();
+        touchDragDistance = 0;
+        touchIsDragging = false;
+        updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
+    }
 });
 renderer.domElement.addEventListener('mousemove', (e) => {
-    if (isTouchMode) handleInputMove(e, e.clientX, e.clientY);
+    if (isTouchMode) {
+        updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
+    }
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
-    if (isTouchMode && e.button === 0) handleInputEnd(e, e.clientX, e.clientY);
+    if (isTouchMode && e.button === 0) {
+        const dist = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
+        const duration = Date.now() - touchStartTime;
+        if (dist < 15 && duration < 300) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            if (currentTool === 'place' && ghostBlock.visible) {
+                createBlock(ghostBlock.position.clone(), currentColorIndex);
+            } else if (currentTool === 'delete') {
+                const blockMeshes = placedBlocks.map(b => b.mesh);
+                const intersects = raycaster.intersectObjects(blockMeshes);
+                if (intersects.length > 0) {
+                    const hitBlock = intersects[0].object;
+                    const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
+                    if (index !== -1) {
+                        const block = placedBlocks[index];
+                        scene.remove(block.mesh);
+                        scene.remove(block.wireframe);
+                        occupiedPositions.delete(positionKey(block.mesh.position));
+                        placedBlocks.splice(index, 1);
+                    }
+                }
+            }
+        }
+    }
 });
 
 // Debug Toggle
