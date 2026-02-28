@@ -130,6 +130,39 @@
             transform: scale(1.1);
             box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
         }
+
+        /* Responsive: iPhone-sized screens */
+        @media (max-width: 500px) {
+            #controls {
+                max-width: 85vw;
+                padding: 12px;
+                top: 8px;
+                left: 8px;
+                border-radius: 10px;
+            }
+
+            #controls h2 {
+                font-size: 16px;
+                margin-bottom: 6px;
+                padding-bottom: 4px;
+            }
+
+            .control-item {
+                font-size: 12px;
+                margin: 3px 0;
+            }
+
+            .color-box {
+                width: 32px;
+                height: 32px;
+            }
+
+            .color-palette {
+                gap: 6px;
+                margin-top: 6px;
+                padding-top: 6px;
+            }
+        }
     </style>
 </head>
 
@@ -230,7 +263,7 @@
     </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="app.js?v=beta2188"></script>
+    <script src="app.js?v=beta2189"></script>
 
     <script>
         // Audio Auto-play handling

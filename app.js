@@ -580,6 +580,7 @@ let lastTwoFingerCenter = { x: 0, y: 0 };
 let longPressTimer = null;
 let isLongPressRotating = false;
 let touchPlaced = false; // Debounce flag to prevent double placement
+let lastTouchEndTime = 0; // Timestamp to block synthetic mouse events
 
 function getTouchDistance(t1, t2) {
     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -619,11 +620,13 @@ renderer.domElement.addEventListener('touchstart', (e) => {
 
         // Start long-press timer: after 300ms, switch to rotation mode
         cancelLongPress();
+        const startX = t.clientX; // Save coords — Touch objects are recycled by browser
+        const startY = t.clientY;
         longPressTimer = setTimeout(() => {
             if (!twoFingerActive && !touchPlaced) {
                 isLongPressRotating = true;
                 updateCameraTarget(); // Center rotation on blocks
-                previousMousePosition = { x: t.clientX, y: t.clientY };
+                previousMousePosition = { x: startX, y: startY };
                 ghostBlock.visible = false; // Hide ghost during rotation
             }
         }, 300);
@@ -708,6 +711,7 @@ renderer.domElement.addEventListener('touchend', (e) => {
     if (isLongPressRotating) {
         isLongPressRotating = false;
         touchIsDragging = false;
+        lastTouchEndTime = Date.now();
         return;
     }
 
@@ -759,6 +763,7 @@ renderer.domElement.addEventListener('touchend', (e) => {
     }
 
     touchIsDragging = false;
+    lastTouchEndTime = Date.now();
 }, { passive: true });
 
 
@@ -801,8 +806,12 @@ window.toggleTouchHelp = function () {
 }
 
 // --- Simulator Events (for testing touch mode on desktop via ?touch=1) ---
+// These handlers exist for desktop testing with ?touch=1 parameter.
+// On real touch devices, the browser fires synthetic mouse events after touch events.
+// We skip any mouse event that arrives within 500ms of a real touch event.
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (isTouchMode && e.button === 0) {
+        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
         touchStartPos.set(e.clientX, e.clientY);
         touchStartTime = Date.now();
         touchDragDistance = 0;
@@ -824,6 +833,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 });
 renderer.domElement.addEventListener('mousemove', (e) => {
     if (isTouchMode) {
+        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
         if (isLongPressRotating) {
             const deltaX = e.clientX - previousMousePosition.x;
             const deltaY = e.clientY - previousMousePosition.y;
@@ -839,6 +849,7 @@ renderer.domElement.addEventListener('mousemove', (e) => {
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
     if (isTouchMode && e.button === 0) {
+        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
         cancelLongPress();
         if (isLongPressRotating) {
             isLongPressRotating = false;
