@@ -28,26 +28,26 @@
             top: 15px;
             left: 15px;
             background: rgba(255, 255, 255, 0.88);
-            padding: 24px;
-            border-radius: 14px;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             z-index: 100;
-            max-width: 400px;
+            max-width: 520px;
         }
 
         #controls h2 {
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             color: #333;
-            font-size: 22px;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 8px;
+            font-size: 28px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
         }
 
         .control-item {
-            margin: 6px 0;
-            font-size: 16px;
+            margin: 8px 0;
+            font-size: 20px;
             color: #555;
             line-height: 1.6;
         }
@@ -66,9 +66,9 @@
         }
 
         .color-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
+            width: 64px;
+            height: 64px;
+            border-radius: 10px;
             cursor: pointer;
             transition: all 0.3s ease;
             border: 3px solid transparent;
@@ -150,11 +150,9 @@
 
         <!-- Touch Instructions -->
         <div id="touch-instructions" style="display: none;">
-            <div class="control-item"><strong>1-Finger Tap:</strong> Place Block</div>
-            <div class="control-item"><strong>1-Finger Drag:</strong> Move Cursor</div>
-            <div class="control-item"><strong>2-Finger Pinch:</strong> Zoom</div>
-            <div class="control-item"><strong>2-Finger Drag:</strong> Rotate View</div>
-            <div class="control-item"><strong>📦:</strong> Place &nbsp; <strong>🗑️:</strong> Delete</div>
+            <div class="control-item"><strong>Tap:</strong> Place / Delete</div>
+            <div class="control-item"><strong>Hold:</strong> Rotate</div>
+            <div class="control-item"><strong>2-Finger:</strong> Zoom + Rotate</div>
         </div>
 
         <div class="color-palette">
@@ -166,7 +164,7 @@
         <div
             style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 14px; color: #888;">
             Design by <strong style="color: #667eea;">zeror</strong><br>
-            <span style="font-size: 12px; color: #aaa;">Updated: Feb 27 20:43</span>
+            <span style="font-size: 12px; color: #aaa;">Updated: Feb 27 20:53</span>
         </div>
     </div>
 
@@ -199,17 +197,16 @@
         max-width: 260px;
     ">
         <div style="font-weight: 700; margin-bottom: 6px; color: #667eea; font-size: 16px;">Touch Controls</div>
-        <div><strong>1-Finger Tap</strong> — Place / Delete</div>
-        <div><strong>1-Finger Drag</strong> — Move Cursor</div>
-        <div><strong>2-Finger Pinch</strong> — Zoom</div>
-        <div><strong>2-Finger Drag</strong> — Rotate</div>
-        <div style="margin-top: 8px; font-size: 12px; color: #888;">Tap ❓ again to close</div>
+        <div><strong>Tap</strong> — Place / Delete</div>
+        <div><strong>Hold + Drag</strong> — Rotate</div>
+        <div><strong>2-Finger</strong> — Zoom + Rotate</div>
+        <div style="margin-top: 8px; font-size: 12px; color: #888;">Tap ❓ to close</div>
     </div>
 
     <!-- PC Mute Button -->
     <button id="pc-mute-btn" onclick="toggleMute()" style="
         position: absolute;
-        left: 440px;
+        left: 570px;
         top: 20px;
         width: 40px;
         height: 40px;
@@ -233,7 +230,7 @@
     </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="app.js?v=beta2187"></script>
+    <script src="app.js?v=beta2188"></script>
 
     <script>
         // Audio Auto-play handling

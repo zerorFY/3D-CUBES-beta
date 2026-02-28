@@ -332,6 +332,7 @@ let pcMouseDownTime = 0;
 let isLeftDragging = false;
 
 renderer.domElement.addEventListener('mousedown', (e) => {
+    if (isTouchMode) return; // Touch has its own handlers
     if (e.button === 0) {
         // Left click: record for tap detection, also start rotation
         pcMouseDownPos = { x: e.clientX, y: e.clientY };
@@ -353,6 +354,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 });
 
 renderer.domElement.addEventListener('mousemove', (e) => {
+    if (isTouchMode) return;
     if (isRotating) {
         const deltaX = e.clientX - previousMousePosition.x;
         const deltaY = e.clientY - previousMousePosition.y;
@@ -384,6 +386,7 @@ renderer.domElement.addEventListener('mousemove', (e) => {
 });
 
 renderer.domElement.addEventListener('mouseup', (e) => {
+    if (isTouchMode) return;
     if (e.button === 0 && isLeftDragging) {
         isLeftDragging = false;
         isRotating = false;
@@ -574,6 +577,9 @@ let touchIsDragging = false;
 let twoFingerActive = false;
 let lastPinchDist = 0;
 let lastTwoFingerCenter = { x: 0, y: 0 };
+let longPressTimer = null;
+let isLongPressRotating = false;
+let touchPlaced = false; // Debounce flag to prevent double placement
 
 function getTouchDistance(t1, t2) {
     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -586,29 +592,51 @@ function getTouchCenter(t1, t2) {
     };
 }
 
+function cancelLongPress() {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+}
+
 // --- Touch Start ---
 renderer.domElement.addEventListener('touchstart', (e) => {
     if (!isTouchMode) return;
 
     if (e.touches.length === 1) {
-        // Single finger: record start for tap vs drag detection
+        // Single finger: record start for tap vs drag vs long-press
         const t = e.touches[0];
         touchStartPos.set(t.clientX, t.clientY);
         touchStartTime = Date.now();
         touchDragDistance = 0;
         touchIsDragging = false;
         twoFingerActive = false;
+        isLongPressRotating = false;
+        touchPlaced = false;
 
         // Update ghost block position
         updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
+
+        // Start long-press timer: after 300ms, switch to rotation mode
+        cancelLongPress();
+        longPressTimer = setTimeout(() => {
+            if (!twoFingerActive && !touchPlaced) {
+                isLongPressRotating = true;
+                updateCameraTarget(); // Center rotation on blocks
+                previousMousePosition = { x: t.clientX, y: t.clientY };
+                ghostBlock.visible = false; // Hide ghost during rotation
+            }
+        }, 300);
     }
     else if (e.touches.length === 2) {
         // Two fingers: start pinch-zoom / rotate
+        cancelLongPress();
+        isLongPressRotating = false;
         twoFingerActive = true;
         touchIsDragging = false;
         lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
         lastTwoFingerCenter = getTouchCenter(e.touches[0], e.touches[1]);
-        updateCameraTarget();
+        updateCameraTarget(); // Center rotation on blocks
     }
 }, { passive: true });
 
@@ -618,21 +646,34 @@ renderer.domElement.addEventListener('touchmove', (e) => {
     e.preventDefault();
 
     if (e.touches.length === 1 && !twoFingerActive) {
-        // Single finger drag: move the ghost cursor
         const t = e.touches[0];
         const dx = t.clientX - touchStartPos.x;
         const dy = t.clientY - touchStartPos.y;
         touchDragDistance = Math.hypot(dx, dy);
 
-        if (touchDragDistance > 10) {
-            touchIsDragging = true;
-        }
+        if (isLongPressRotating) {
+            // Long-press rotation: rotate camera with single finger
+            const deltaX = t.clientX - previousMousePosition.x;
+            const deltaY = t.clientY - previousMousePosition.y;
 
-        // Always update ghost position while dragging
-        updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
+            cameraRotation.y += deltaX * 0.008;
+            cameraRotation.x += deltaY * 0.008;
+            cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
+
+            updateCamera();
+            previousMousePosition = { x: t.clientX, y: t.clientY };
+        } else {
+            // Normal single finger drag: move ghost cursor
+            if (touchDragDistance > 10) {
+                touchIsDragging = true;
+                cancelLongPress(); // Cancel long-press if dragging
+            }
+            updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
+        }
     }
     else if (e.touches.length === 2) {
         twoFingerActive = true;
+        cancelLongPress();
 
         // Pinch zoom
         const newDist = getTouchDistance(e.touches[0], e.touches[1]);
@@ -661,6 +702,14 @@ renderer.domElement.addEventListener('touchmove', (e) => {
 // --- Touch End ---
 renderer.domElement.addEventListener('touchend', (e) => {
     if (!isTouchMode) return;
+    cancelLongPress();
+
+    // If was doing long-press rotation, just stop
+    if (isLongPressRotating) {
+        isLongPressRotating = false;
+        touchIsDragging = false;
+        return;
+    }
 
     // If two-finger gesture just ended (one finger lifted), reset but don't act
     if (twoFingerActive) {
@@ -671,27 +720,27 @@ renderer.domElement.addEventListener('touchend', (e) => {
         return;
     }
 
-    // Single finger tap detection
-    if (e.changedTouches.length > 0 && !touchIsDragging) {
+    // Single finger tap detection (only if not already placed and not dragging)
+    if (e.changedTouches.length > 0 && !touchIsDragging && !touchPlaced) {
         const t = e.changedTouches[0];
         const duration = Date.now() - touchStartTime;
         const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
 
         // Tap: short duration + small distance
         if (dist < 15 && duration < 300) {
+            touchPlaced = true; // Prevent duplicate
+
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((t.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = -((t.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
 
             if (currentTool === 'place') {
-                // Place block at ghost position
                 if (ghostBlock.visible) {
                     createBlock(ghostBlock.position.clone(), currentColorIndex);
                 }
             }
             else if (currentTool === 'delete') {
-                // Delete the tapped block
                 const blockMeshes = placedBlocks.map(b => b.mesh);
                 const intersects = raycaster.intersectObjects(blockMeshes);
                 if (intersects.length > 0) {
@@ -751,26 +800,55 @@ window.toggleTouchHelp = function () {
     }
 }
 
-// --- Simulator Events (for testing touch mode on desktop) ---
+// --- Simulator Events (for testing touch mode on desktop via ?touch=1) ---
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (isTouchMode && e.button === 0) {
         touchStartPos.set(e.clientX, e.clientY);
         touchStartTime = Date.now();
         touchDragDistance = 0;
         touchIsDragging = false;
+        touchPlaced = false;
+        isLongPressRotating = false;
         updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
+
+        cancelLongPress();
+        longPressTimer = setTimeout(() => {
+            if (!touchPlaced) {
+                isLongPressRotating = true;
+                updateCameraTarget();
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                ghostBlock.visible = false;
+            }
+        }, 300);
     }
 });
 renderer.domElement.addEventListener('mousemove', (e) => {
     if (isTouchMode) {
-        updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
+        if (isLongPressRotating) {
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            cameraRotation.y += deltaX * 0.008;
+            cameraRotation.x += deltaY * 0.008;
+            cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
+            updateCamera();
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        } else {
+            updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
+        }
     }
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
     if (isTouchMode && e.button === 0) {
+        cancelLongPress();
+        if (isLongPressRotating) {
+            isLongPressRotating = false;
+            return;
+        }
+        if (touchPlaced) return;
         const dist = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
         const duration = Date.now() - touchStartTime;
         if (dist < 15 && duration < 300) {
+            touchPlaced = true;
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
