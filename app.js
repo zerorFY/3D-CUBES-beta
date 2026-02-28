@@ -578,6 +578,7 @@ let touchState = TOUCH_STATE.IDLE;
 let twoFingerActive = false;
 let lastPinchDist = 0;
 let lastTwoFingerCenter = { x: 0, y: 0 };
+let lastTwoFingerAngle = 0; // Angle between two fingers for rotation
 let lastTouchEndTime = 0; // Block synthetic mouse events
 const DRAG_THRESHOLD = 8; // px — movement beyond this = rotation, not tap
 
@@ -590,6 +591,10 @@ function getTouchCenter(t1, t2) {
         x: (t1.clientX + t2.clientX) / 2,
         y: (t1.clientY + t2.clientY) / 2
     };
+}
+
+function getTouchAngle(t1, t2) {
+    return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
 }
 
 function doPlaceOrDelete(screenX, screenY) {
@@ -635,6 +640,7 @@ renderer.domElement.addEventListener('touchstart', (e) => {
         twoFingerActive = true;
         lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
         lastTwoFingerCenter = getTouchCenter(e.touches[0], e.touches[1]);
+        lastTwoFingerAngle = getTouchAngle(e.touches[0], e.touches[1]);
         updateCameraTarget();
         ghostBlock.visible = false;
     }
@@ -672,6 +678,7 @@ renderer.domElement.addEventListener('touchmove', (e) => {
         twoFingerActive = true;
         touchState = TOUCH_STATE.IDLE;
 
+        // 1. Pinch zoom (distance change)
         const newDist = getTouchDistance(e.touches[0], e.touches[1]);
         if (lastPinchDist > 0) {
             const scale = lastPinchDist / newDist;
@@ -680,13 +687,30 @@ renderer.domElement.addEventListener('touchmove', (e) => {
         }
         lastPinchDist = newDist;
 
+        // 2. Pan (center movement)
         const newCenter = getTouchCenter(e.touches[0], e.touches[1]);
-        const deltaX = newCenter.x - lastTwoFingerCenter.x;
-        const deltaY = newCenter.y - lastTwoFingerCenter.y;
-        cameraRotation.y += deltaX * 0.008;
-        cameraRotation.x += deltaY * 0.008;
-        cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
+        const panDX = newCenter.x - lastTwoFingerCenter.x;
+        const panDY = newCenter.y - lastTwoFingerCenter.y;
+
+        const right = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        camera.getWorldDirection(right);
+        right.cross(up).normalize();
+        const panSpeed = cameraDistance * 0.001;
+        cameraTarget.add(right.multiplyScalar(-panDX * panSpeed));
+        cameraTarget.y += panDY * panSpeed;
+
         lastTwoFingerCenter = newCenter;
+
+        // 3. Rotate (angle change between two fingers)
+        const newAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        let angleDelta = newAngle - lastTwoFingerAngle;
+        // Normalize to [-PI, PI] to handle wrap-around
+        if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+        if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+        cameraRotation.y -= angleDelta;
+        lastTwoFingerAngle = newAngle;
+
         updateCamera();
     }
 }, { passive: false });
