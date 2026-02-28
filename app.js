@@ -570,17 +570,16 @@ function detectDevice() {
 
 detectDevice(); // Initial Run
 
-// --- Gesture-based Touch Logic ---
-// State for touch gesture detection
-let touchDragDistance = 0;
-let touchIsDragging = false;
+// --- State Machine Touch Logic ---
+// States: IDLE → PENDING (on touchstart) → ROTATING (on drag) or TAP (on lift)
+// No setTimeout needed: drag = rotate, lift without move = tap (place/delete)
+const TOUCH_STATE = { IDLE: 0, PENDING: 1, ROTATING: 2 };
+let touchState = TOUCH_STATE.IDLE;
 let twoFingerActive = false;
 let lastPinchDist = 0;
 let lastTwoFingerCenter = { x: 0, y: 0 };
-let longPressTimer = null;
-let isLongPressRotating = false;
-let touchPlaced = false; // Debounce flag to prevent double placement
-let lastTouchEndTime = 0; // Timestamp to block synthetic mouse events
+let lastTouchEndTime = 0; // Block synthetic mouse events
+const DRAG_THRESHOLD = 8; // px — movement beyond this = rotation, not tap
 
 function getTouchDistance(t1, t2) {
     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -593,10 +592,30 @@ function getTouchCenter(t1, t2) {
     };
 }
 
-function cancelLongPress() {
-    if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+function doPlaceOrDelete(screenX, screenY) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((screenX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((screenY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    if (currentTool === 'place') {
+        if (ghostBlock.visible) {
+            createBlock(ghostBlock.position.clone(), currentColorIndex);
+        }
+    } else if (currentTool === 'delete') {
+        const blockMeshes = placedBlocks.map(b => b.mesh);
+        const intersects = raycaster.intersectObjects(blockMeshes);
+        if (intersects.length > 0) {
+            const hitBlock = intersects[0].object;
+            const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
+            if (index !== -1) {
+                const block = placedBlocks[index];
+                scene.remove(block.mesh);
+                scene.remove(block.wireframe);
+                occupiedPositions.delete(positionKey(block.mesh.position));
+                placedBlocks.splice(index, 1);
+            }
+        }
     }
 }
 
@@ -604,42 +623,20 @@ function cancelLongPress() {
 renderer.domElement.addEventListener('touchstart', (e) => {
     if (!isTouchMode) return;
 
-    if (e.touches.length === 1) {
-        // Single finger: record start for tap vs drag vs long-press
+    if (e.touches.length === 1 && !twoFingerActive) {
         const t = e.touches[0];
         touchStartPos.set(t.clientX, t.clientY);
-        touchStartTime = Date.now();
-        touchDragDistance = 0;
-        touchIsDragging = false;
-        twoFingerActive = false;
-        isLongPressRotating = false;
-        touchPlaced = false;
-
-        // Update ghost block position
+        touchState = TOUCH_STATE.PENDING;
+        // Show ghost at tap position
         updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
-
-        // Start long-press timer: after 300ms, switch to rotation mode
-        cancelLongPress();
-        const startX = t.clientX; // Save coords — Touch objects are recycled by browser
-        const startY = t.clientY;
-        longPressTimer = setTimeout(() => {
-            if (!twoFingerActive && !touchPlaced) {
-                isLongPressRotating = true;
-                updateCameraTarget(); // Center rotation on blocks
-                previousMousePosition = { x: startX, y: startY };
-                ghostBlock.visible = false; // Hide ghost during rotation
-            }
-        }, 300);
     }
     else if (e.touches.length === 2) {
-        // Two fingers: start pinch-zoom / rotate
-        cancelLongPress();
-        isLongPressRotating = false;
+        touchState = TOUCH_STATE.IDLE;
         twoFingerActive = true;
-        touchIsDragging = false;
         lastPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
         lastTwoFingerCenter = getTouchCenter(e.touches[0], e.touches[1]);
-        updateCameraTarget(); // Center rotation on blocks
+        updateCameraTarget();
+        ghostBlock.visible = false;
     }
 }, { passive: true });
 
@@ -650,35 +647,31 @@ renderer.domElement.addEventListener('touchmove', (e) => {
 
     if (e.touches.length === 1 && !twoFingerActive) {
         const t = e.touches[0];
-        const dx = t.clientX - touchStartPos.x;
-        const dy = t.clientY - touchStartPos.y;
-        touchDragDistance = Math.hypot(dx, dy);
 
-        if (isLongPressRotating) {
-            // Long-press rotation: rotate camera with single finger
+        if (touchState === TOUCH_STATE.PENDING) {
+            const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
+            if (dist > DRAG_THRESHOLD) {
+                touchState = TOUCH_STATE.ROTATING;
+                updateCameraTarget();
+                previousMousePosition = { x: t.clientX, y: t.clientY };
+                ghostBlock.visible = false;
+            }
+        }
+
+        if (touchState === TOUCH_STATE.ROTATING) {
             const deltaX = t.clientX - previousMousePosition.x;
             const deltaY = t.clientY - previousMousePosition.y;
-
             cameraRotation.y += deltaX * 0.008;
             cameraRotation.x += deltaY * 0.008;
             cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
-
             updateCamera();
             previousMousePosition = { x: t.clientX, y: t.clientY };
-        } else {
-            // Normal single finger drag: move ghost cursor
-            if (touchDragDistance > 10) {
-                touchIsDragging = true;
-                cancelLongPress(); // Cancel long-press if dragging
-            }
-            updateGhostBlock({ clientX: t.clientX, clientY: t.clientY });
         }
     }
     else if (e.touches.length === 2) {
         twoFingerActive = true;
-        cancelLongPress();
+        touchState = TOUCH_STATE.IDLE;
 
-        // Pinch zoom
         const newDist = getTouchDistance(e.touches[0], e.touches[1]);
         if (lastPinchDist > 0) {
             const scale = lastPinchDist / newDist;
@@ -687,17 +680,13 @@ renderer.domElement.addEventListener('touchmove', (e) => {
         }
         lastPinchDist = newDist;
 
-        // Two-finger drag = rotate
         const newCenter = getTouchCenter(e.touches[0], e.touches[1]);
         const deltaX = newCenter.x - lastTwoFingerCenter.x;
         const deltaY = newCenter.y - lastTwoFingerCenter.y;
-
         cameraRotation.y += deltaX * 0.008;
         cameraRotation.x += deltaY * 0.008;
         cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
-
         lastTwoFingerCenter = newCenter;
-
         updateCamera();
     }
 }, { passive: false });
@@ -705,64 +694,26 @@ renderer.domElement.addEventListener('touchmove', (e) => {
 // --- Touch End ---
 renderer.domElement.addEventListener('touchend', (e) => {
     if (!isTouchMode) return;
-    cancelLongPress();
 
-    // If was doing long-press rotation, just stop
-    if (isLongPressRotating) {
-        isLongPressRotating = false;
-        touchIsDragging = false;
-        lastTouchEndTime = Date.now();
-        return;
-    }
-
-    // If two-finger gesture just ended (one finger lifted), reset but don't act
+    // Two-finger gesture ended
     if (twoFingerActive) {
         if (e.touches.length === 0) {
             twoFingerActive = false;
             lastPinchDist = 0;
         }
+        touchState = TOUCH_STATE.IDLE;
+        lastTouchEndTime = Date.now();
         return;
     }
 
-    // Single finger tap detection (only if not already placed and not dragging)
-    if (e.changedTouches.length > 0 && !touchIsDragging && !touchPlaced) {
+    // Single finger lifted while still PENDING = TAP → place or delete
+    if (touchState === TOUCH_STATE.PENDING && e.changedTouches.length > 0) {
         const t = e.changedTouches[0];
-        const duration = Date.now() - touchStartTime;
-        const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
-
-        // Tap: short duration + small distance
-        if (dist < 15 && duration < 300) {
-            touchPlaced = true; // Prevent duplicate
-
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((t.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((t.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-
-            if (currentTool === 'place') {
-                if (ghostBlock.visible) {
-                    createBlock(ghostBlock.position.clone(), currentColorIndex);
-                }
-            }
-            else if (currentTool === 'delete') {
-                const blockMeshes = placedBlocks.map(b => b.mesh);
-                const intersects = raycaster.intersectObjects(blockMeshes);
-                if (intersects.length > 0) {
-                    const hitBlock = intersects[0].object;
-                    const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
-                    if (index !== -1) {
-                        const block = placedBlocks[index];
-                        scene.remove(block.mesh);
-                        scene.remove(block.wireframe);
-                        occupiedPositions.delete(positionKey(block.mesh.position));
-                        placedBlocks.splice(index, 1);
-                    }
-                }
-            }
-        }
+        doPlaceOrDelete(t.clientX, t.clientY);
     }
+    // If ROTATING, just stop — no action on lift
 
-    touchIsDragging = false;
+    touchState = TOUCH_STATE.IDLE;
     lastTouchEndTime = Date.now();
 }, { passive: true });
 
@@ -774,22 +725,18 @@ window.toggleMute = function () {
     if (audio) {
         audio.muted = !audio.muted;
         const icon = audio.muted ? '🔇' : '🔊';
-        // Update all buttons (PC and Touch)
         const btns = document.querySelectorAll('#tool-mute, #pc-mute-btn');
         btns.forEach(btn => btn.innerText = icon);
     }
 }
 
 window.toggleTransparency = function () {
-    // Reuse existing transparencyMode logic
     transparencyMode = !transparencyMode;
     placedBlocks.forEach(block => {
         block.mesh.material.transparent = transparencyMode;
         block.mesh.material.opacity = transparencyMode ? 0.2 : 1.0;
-        block.mesh.material.needsUpdate = true; // Force update
+        block.mesh.material.needsUpdate = true;
     });
-
-    // Update button style
     const btn = document.getElementById('tool-transparency');
     if (btn) {
         if (transparencyMode) btn.classList.add('active');
@@ -805,36 +752,29 @@ window.toggleTouchHelp = function () {
     }
 }
 
-// --- Simulator Events (for testing touch mode on desktop via ?touch=1) ---
-// These handlers exist for desktop testing with ?touch=1 parameter.
-// On real touch devices, the browser fires synthetic mouse events after touch events.
-// We skip any mouse event that arrives within 500ms of a real touch event.
+// --- Simulator Events (desktop ?touch=1 testing only) ---
+// Skip synthetic mouse events that browsers fire after real touch events
 renderer.domElement.addEventListener('mousedown', (e) => {
     if (isTouchMode && e.button === 0) {
-        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
+        if (Date.now() - lastTouchEndTime < 500) return;
         touchStartPos.set(e.clientX, e.clientY);
-        touchStartTime = Date.now();
-        touchDragDistance = 0;
-        touchIsDragging = false;
-        touchPlaced = false;
-        isLongPressRotating = false;
+        touchState = TOUCH_STATE.PENDING;
         updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
-
-        cancelLongPress();
-        longPressTimer = setTimeout(() => {
-            if (!touchPlaced) {
-                isLongPressRotating = true;
-                updateCameraTarget();
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-                ghostBlock.visible = false;
-            }
-        }, 300);
     }
 });
 renderer.domElement.addEventListener('mousemove', (e) => {
     if (isTouchMode) {
-        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
-        if (isLongPressRotating) {
+        if (Date.now() - lastTouchEndTime < 500) return;
+        if (touchState === TOUCH_STATE.PENDING) {
+            const dist = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
+            if (dist > DRAG_THRESHOLD) {
+                touchState = TOUCH_STATE.ROTATING;
+                updateCameraTarget();
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                ghostBlock.visible = false;
+            }
+        }
+        if (touchState === TOUCH_STATE.ROTATING) {
             const deltaX = e.clientX - previousMousePosition.x;
             const deltaY = e.clientY - previousMousePosition.y;
             cameraRotation.y += deltaX * 0.008;
@@ -842,46 +782,18 @@ renderer.domElement.addEventListener('mousemove', (e) => {
             cameraRotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, cameraRotation.x));
             updateCamera();
             previousMousePosition = { x: e.clientX, y: e.clientY };
-        } else {
+        } else if (touchState === TOUCH_STATE.IDLE) {
             updateGhostBlock({ clientX: e.clientX, clientY: e.clientY });
         }
     }
 });
 renderer.domElement.addEventListener('mouseup', (e) => {
     if (isTouchMode && e.button === 0) {
-        if (Date.now() - lastTouchEndTime < 500) return; // Skip synthetic
-        cancelLongPress();
-        if (isLongPressRotating) {
-            isLongPressRotating = false;
-            return;
+        if (Date.now() - lastTouchEndTime < 500) return;
+        if (touchState === TOUCH_STATE.PENDING) {
+            doPlaceOrDelete(e.clientX, e.clientY);
         }
-        if (touchPlaced) return;
-        const dist = Math.hypot(e.clientX - touchStartPos.x, e.clientY - touchStartPos.y);
-        const duration = Date.now() - touchStartTime;
-        if (dist < 15 && duration < 300) {
-            touchPlaced = true;
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            if (currentTool === 'place' && ghostBlock.visible) {
-                createBlock(ghostBlock.position.clone(), currentColorIndex);
-            } else if (currentTool === 'delete') {
-                const blockMeshes = placedBlocks.map(b => b.mesh);
-                const intersects = raycaster.intersectObjects(blockMeshes);
-                if (intersects.length > 0) {
-                    const hitBlock = intersects[0].object;
-                    const index = placedBlocks.findIndex(b => b.mesh === hitBlock);
-                    if (index !== -1) {
-                        const block = placedBlocks[index];
-                        scene.remove(block.mesh);
-                        scene.remove(block.wireframe);
-                        occupiedPositions.delete(positionKey(block.mesh.position));
-                        placedBlocks.splice(index, 1);
-                    }
-                }
-            }
-        }
+        touchState = TOUCH_STATE.IDLE;
     }
 });
 

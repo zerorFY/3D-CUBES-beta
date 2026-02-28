@@ -163,6 +163,30 @@
                 padding-top: 6px;
             }
         }
+
+        /* Responsive: Tablet-sized screens (iPad) */
+        @media (min-width: 501px) and (max-width: 900px) {
+            #controls {
+                max-width: 280px;
+                padding: 14px;
+            }
+
+            #controls h2 {
+                font-size: 18px;
+                margin-bottom: 8px;
+                padding-bottom: 6px;
+            }
+
+            .control-item {
+                font-size: 13px;
+                margin: 4px 0;
+            }
+
+            .color-box {
+                width: 36px;
+                height: 36px;
+            }
+        }
     </style>
 </head>
 
@@ -184,7 +208,7 @@
         <!-- Touch Instructions -->
         <div id="touch-instructions" style="display: none;">
             <div class="control-item"><strong>Tap:</strong> Place / Delete</div>
-            <div class="control-item"><strong>Hold:</strong> Rotate</div>
+            <div class="control-item"><strong>Drag:</strong> Rotate</div>
             <div class="control-item"><strong>2-Finger:</strong> Zoom + Rotate</div>
         </div>
 
@@ -231,7 +255,7 @@
     ">
         <div style="font-weight: 700; margin-bottom: 6px; color: #667eea; font-size: 16px;">Touch Controls</div>
         <div><strong>Tap</strong> — Place / Delete</div>
-        <div><strong>Hold + Drag</strong> — Rotate</div>
+        <div><strong>Drag</strong> — Rotate View</div>
         <div><strong>2-Finger</strong> — Zoom + Rotate</div>
         <div style="margin-top: 8px; font-size: 12px; color: #888;">Tap ❓ to close</div>
     </div>
@@ -263,7 +287,7 @@
     </audio>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="app.js?v=beta2189"></script>
+    <script src="app.js?v=beta2190"></script>
 
     <script>
         // Audio Auto-play handling
